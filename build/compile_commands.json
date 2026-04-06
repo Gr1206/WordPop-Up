@@ -1,0 +1,8 @@
+[
+{
+  "directory": "C:/Users/gonca/WordPop-Up/build",
+  "command": "C:\\PROGRA~1\\MIB055~1\\18\\COMMUN~1\\VC\\Tools\\MSVC\\1450~1.357\\bin\\Hostx64\\x64\\cl.exe  /nologo /TP /DWIN32 /D_WINDOWS /W3 /GR /EHsc /MDd /Zi /Ob0 /Od /RTC1 -std:c++17 /FoCMakeFiles\\DicionarioPopUp.dir\\main.cpp.obj /FdCMakeFiles\\DicionarioPopUp.dir\\ /FS -c C:\\Users\\gonca\\WordPop-Up\\main.cpp",
+  "file": "C:/Users/gonca/WordPop-Up/main.cpp",
+  "output": "C:/Users/gonca/WordPop-Up/build/CMakeFiles/DicionarioPopUp.dir/main.cpp.obj"
+}
+]

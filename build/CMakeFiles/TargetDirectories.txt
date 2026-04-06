@@ -1,0 +1,3 @@
+C:/Users/gonca/WordPop-Up/build/CMakeFiles/DicionarioPopUp.dir
+C:/Users/gonca/WordPop-Up/build/CMakeFiles/edit_cache.dir
+C:/Users/gonca/WordPop-Up/build/CMakeFiles/rebuild_cache.dir
