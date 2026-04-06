@@ -1,0 +1,17 @@
+# Pastas de build e temporários
+build/
+out/
+.vs/
+bin/
+obj/
+
+# Executáveis e ficheiros de depuração do Windows
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.suo
+*.user
+
+# Configurações locais do VS Code (opcional, mas recomendado)
+.vscode/
