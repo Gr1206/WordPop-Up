@@ -6,6 +6,7 @@
 #include <QTimer>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QPainter>
 #include <QDebug>
 #include <windows.h>
@@ -14,12 +15,15 @@
 #include <string>
 using namespace std;
 
+class MainWindow;
+
 struct ClipboardData {
     string data;
     mutex mutex;
 };
 
 class canvasForCoord : public QWidget {
+    Q_OBJECT
     private: //atribute
         bool moving = false;
         QPoint mousePos;
@@ -37,9 +41,7 @@ class canvasForCoord : public QWidget {
             this->setWindowOpacity(0.5); 
             this->setStyleSheet("background-color: black;"); 
             this->setMouseTracking(true);
-            paintEvent(nullptr);
             
-        
 
             qDebug() << "Canvas criado e pronto para detetar o rato!";
     }
@@ -52,17 +54,116 @@ class canvasForCoord : public QWidget {
             
             painter.drawRect(x, y, widthRec, heightRec);
             painter.setBrush(Qt::red);
-            painter.drawEllipse(QPoint(this->width() / 2, this->height() / 2), 2, 2);
+            //i need to make this move as well
+            painter.drawEllipse(QPoint(x + widthRec / 2, y + heightRec / 2), 2, 2);
 
         }
     //draw the coordinates cursor
 
+        void mousePressEvent(QMouseEvent *event) override {
+            if(event->button() == Qt::LeftButton) {
+                moving = true;
+                mousePos = event->pos();
+                this->x = event->position().x() - int(widthRec / 2);
+                this->y = event->position().y() - int(heightRec / 2);
+                this->configCoords(x, y);
+                this->update();
+                
+            }
+        }
+
+        void keyPressEvent(QKeyEvent *event) override {
+            if(event->key() == Qt::Key_Escape) {
+                this->close();
+                emit windowClosed();
+            }
+        }
+        
+        void configCoords(int x, int y) {
+            this->x = x;
+            this->y = y;
+            emit coordsChanged(x, y);
+            this->update();
+        }
+
+        signals :
+            void windowClosed(); 
+            void coordsChanged(int x, int y);
 
 
 
-    //protected:
-    //mouse events
+    
+        
 };
+
+class MainWindow : public QWidget {
+    private: 
+        int widthM;
+        int heightM;
+        QPushButton button;
+        canvasForCoord* canvas;
+        QTimer *timer;
+        ClipboardData* clipboardData;
+        QLabel *infoLabel;
+    public:
+        MainWindow(ClipboardData* data = nullptr, QWidget *parent = nullptr) : QWidget(parent) {
+            this->clipboardData = data;
+            this->widthM = 400;
+            this->heightM = 300;
+            this->setWindowTitle("Qt Window Example");
+            this->resize(widthM, heightM);
+            createButton();
+            
+            this->timer = new QTimer(this);
+            this->infoLabel = new QLabel("PALAVRAS", this);
+            this->canvas = new canvasForCoord();
+            connect(canvas, &canvasForCoord::coordsChanged, this, &MainWindow::updateCoords);
+            connect(canvas, &canvasForCoord::windowClosed, this, [this]() {
+                this->show();
+            });
+
+
+            QObject::connect(&button, &QPushButton::clicked, [this]() {
+                this->hide();
+                this->canvas->show();
+
+            });
+
+            QObject::connect(timer, &QTimer::timeout, [this]() {
+                lock_guard<mutex> lock(this->clipboardData->mutex);
+                this->infoLabel->setText(QString::fromStdString(this->clipboardData->data));
+                
+            });    
+
+            this->timer->start(100); 
+        }
+        
+        void setText(const QString& text) {
+            this->infoLabel->setText(text);
+        }
+
+        void setClipboardData(ClipboardData* data) {
+            this->clipboardData = data;
+        }
+
+        void updateCoords(int x, int y) {
+            int newX = x - (this->widthM / 2);
+            int newY = y - (this->heightM / 2);
+            this->move(newX, newY);
+            this->update();
+        }
+
+        private:
+            void createButton() {
+                button.setText("Click me");
+                button.setParent(this);
+                button.move(110, 100);
+                button.resize(100, 30);
+                this->show();
+            }
+    };
+
+
 
 
 void hotKeyThread(ClipboardData* clipboardData){
@@ -99,6 +200,7 @@ void hotKeyThread(ClipboardData* clipboardData){
                 OpenClipboard(NULL);
                 //perceber problemas de lock aqui
                 clipboardData->data = (char*)GetClipboardData(CF_TEXT);
+
                 printf("Clipboard: %s\n", clipboardData->data.c_str());
                 CloseClipboard();
                 
@@ -117,35 +219,17 @@ int main(int argc, char *argv[]) {
     
     ClipboardData clipboardData;
     QApplication app(argc, argv);
-    QLabel window;
-    window.resize(320, 240);
-    window.setWindowTitle("Qt Window Example");
     
-    QPushButton button("Click me", &window);
-    button.move(110, 100);
-    button.resize(100, 30);
-    window.show();
-    
-    canvasForCoord* canvas = new canvasForCoord();
     
     thread keyMangment(hotKeyThread, &clipboardData);
     
     keyMangment.detach();
+    
+    MainWindow window(&clipboardData);
 
-    QObject::connect(&button, &QPushButton::clicked, [canvas]() {
-        canvas->show();
-        canvas->raise();
-        canvas->activateWindow();
-    });
+    window.show();    
 
-    QTimer timer;
-    QObject::connect(&timer, &QTimer::timeout, [&clipboardData, &window](){
-        lock_guard<mutex> lock(clipboardData.mutex);
-        window.setText(QString::fromStdString(clipboardData.data));
-        window.show(); 
-    });    
-
-    timer.start(100); 
     return app.exec();
     
 }
+#include "main.moc"
