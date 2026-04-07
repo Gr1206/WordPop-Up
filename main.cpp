@@ -1,9 +1,13 @@
 #include <stdio.h>
 #include <QApplication>
+#include <QPushButton>
 #include <QWidget>
 #include <QString>
 #include <QTimer>
 #include <QLabel>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QDebug>
 #include <windows.h>
 #include <thread>
 #include <mutex>
@@ -15,6 +19,50 @@ struct ClipboardData {
     mutex mutex;
 };
 
+class canvasForCoord : public QWidget {
+    private: //atribute
+        bool moving = false;
+        QPoint mousePos;
+        int widthRec = 20, heightRec = 10;
+        int x, y;
+
+        public:
+        canvasForCoord(QWidget *parent = nullptr) : QWidget(parent) {
+            this->setWindowTitle("Canvas coords");
+            this->setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+            this->setWindowState(Qt::WindowFullScreen); 
+            this->x = (this->width() / 2) - int(this->widthRec / 2);
+            this->y = (this->height() / 2) - int(this->heightRec / 2);
+
+            this->setWindowOpacity(0.5); 
+            this->setStyleSheet("background-color: black;"); 
+            this->setMouseTracking(true);
+            paintEvent(nullptr);
+            
+        
+
+            qDebug() << "Canvas criado e pronto para detetar o rato!";
+    }
+    protected:
+        void paintEvent(QPaintEvent *event) override {
+            QPainter painter(this);
+            painter.setPen(Qt::red);
+            painter.setBrush(Qt::NoBrush);
+            
+            
+            painter.drawRect(x, y, widthRec, heightRec);
+            painter.setBrush(Qt::red);
+            painter.drawEllipse(QPoint(this->width() / 2, this->height() / 2), 2, 2);
+
+        }
+    //draw the coordinates cursor
+
+
+
+
+    //protected:
+    //mouse events
+};
 
 
 void hotKeyThread(ClipboardData* clipboardData){
@@ -72,11 +120,23 @@ int main(int argc, char *argv[]) {
     QLabel window;
     window.resize(320, 240);
     window.setWindowTitle("Qt Window Example");
+    
+    QPushButton button("Click me", &window);
+    button.move(110, 100);
+    button.resize(100, 30);
     window.show();
+    
+    canvasForCoord* canvas = new canvasForCoord();
     
     thread keyMangment(hotKeyThread, &clipboardData);
     
     keyMangment.detach();
+
+    QObject::connect(&button, &QPushButton::clicked, [canvas]() {
+        canvas->show();
+        canvas->raise();
+        canvas->activateWindow();
+    });
 
     QTimer timer;
     QObject::connect(&timer, &QTimer::timeout, [&clipboardData, &window](){
