@@ -43,7 +43,6 @@ class canvasForCoord : public QWidget {
             this->setMouseTracking(true);
             
 
-            qDebug() << "Canvas criado e pronto para detetar o rato!";
     }
     protected:
         void paintEvent(QPaintEvent *event) override {
@@ -111,14 +110,23 @@ class MainWindow : public QWidget {
             this->widthM = 400;
             this->heightM = 300;
             this->setWindowTitle("Qt Window Example");
+            //this->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
             this->resize(widthM, heightM);
-            createButton();
+            this->setStyleSheet(
+                "QWidget { background-color: white;}"
+                "QPushButton { background-color: black; padding: 5px; opacity: 0.8; }"
+                "QPushButton:hover { background-color: #555; }"
+                "QLabel { font-size: 14px; font-weight: bold; }"
+            );
+            this->setWindowOpacity(0.7);
             
+            createConfigButton();
+            createInfoLabel();
+            this->show();
             this->timer = new QTimer(this);
-            this->infoLabel = new QLabel("PALAVRAS", this);
             this->canvas = new canvasForCoord();
-            connect(canvas, &canvasForCoord::coordsChanged, this, &MainWindow::updateCoords);
-            connect(canvas, &canvasForCoord::windowClosed, this, [this]() {
+            QObject::connect(canvas, &canvasForCoord::coordsChanged, this, &MainWindow::updateCoords);
+            QObject::connect(canvas, &canvasForCoord::windowClosed, this, [this]() {
                 this->show();
             });
 
@@ -130,9 +138,9 @@ class MainWindow : public QWidget {
             });
 
             QObject::connect(timer, &QTimer::timeout, [this]() {
+                //check se palavra é a mesma para n perder tempo
                 lock_guard<mutex> lock(this->clipboardData->mutex);
                 this->infoLabel->setText(QString::fromStdString(this->clipboardData->data));
-                
             });    
 
             this->timer->start(100); 
@@ -154,12 +162,23 @@ class MainWindow : public QWidget {
         }
 
         private:
-            void createButton() {
-                button.setText("Click me");
+            void createConfigButton() {
+                button.setText("Config");
                 button.setParent(this);
-                button.move(110, 100);
+                buttonCoords();
+            }
+
+            void buttonCoords() {
+                button.move(this->widthM - 100, 0);
                 button.resize(100, 30);
-                this->show();
+            }
+
+            void createInfoLabel() { //palavra selecionada
+                this->infoLabel = new QLabel("WORDS", this);
+                this->infoLabel->setParent(this);
+                this->infoLabel->move(10, 10);
+                this->infoLabel->resize(20, 20); //posso fazer dinamico dependendo no sizeword
+                this->infoLabel->setStyleSheet("color: red; background-color: yellow;");
             }
     };
 
