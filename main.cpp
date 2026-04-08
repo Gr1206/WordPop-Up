@@ -17,7 +17,7 @@
 using namespace std;
 
 class MainWindow;
-
+std::string fetchWordDefinition(const std::string& word);
 struct ClipboardData {
     string data;
     mutex mutex;
@@ -101,6 +101,7 @@ class MainWindow : public QWidget {
         int widthM;
         int heightM;
         QPushButton button;
+        QPushButton hideButton;
         canvasForCoord* canvas;
         QTimer *timer;
         ClipboardData* clipboardData;
@@ -122,8 +123,13 @@ class MainWindow : public QWidget {
             this->setWindowOpacity(0.7);
             
             createConfigButton();
+            createHideButton();
             createInfoLabel();
+           
+           //depois quando for só para abrir caso o user clique tirar
             this->show();
+           
+           
             this->timer = new QTimer(this);
             this->canvas = new canvasForCoord();
             QObject::connect(canvas, &canvasForCoord::coordsChanged, this, &MainWindow::updateCoords);
@@ -136,6 +142,10 @@ class MainWindow : public QWidget {
                 this->hide();
                 this->canvas->show();
 
+            });
+
+            QObject::connect(&hideButton, &QPushButton::clicked, [this]() {
+                this->hide();
             });
 
             QObject::connect(timer, &QTimer::timeout, [this]() {
@@ -161,6 +171,17 @@ class MainWindow : public QWidget {
             this->move(newX, newY);
             this->update();
         }
+        
+        void popWindow() {
+            this->show();
+        }
+
+        protected:
+            void keyPressEvent(QKeyEvent *event) override {
+                if(event->key() == Qt::Key_Escape) {
+                    this->hide();
+                }
+            }
 
         private:
             void createConfigButton() {
@@ -172,6 +193,18 @@ class MainWindow : public QWidget {
             void buttonCoords() {
                 button.move(this->widthM - 100, 0);
                 button.resize(100, 30);
+            }
+
+            void createHideButton() {
+                //implementar
+                hideButton.setText("Hide");
+                hideButton.setParent(this);
+                hideButtonCoords();
+                 
+            }
+            void hideButtonCoords() {
+                hideButton.move(this->widthM - 100, 30);
+                hideButton.resize(100, 30);
             }
 
             void createInfoLabel() { //palavra selecionada
@@ -186,7 +219,7 @@ class MainWindow : public QWidget {
 
 
 
-void hotKeyThread(ClipboardData* clipboardData){
+void hotKeyThread(ClipboardData* clipboardData, MainWindow* mainWindow) {
     
     if(RegisterHotKey(NULL, 1, MOD_CONTROL, 'H')) { ///basicamente e a base de evento
         printf("sucesso\n");
@@ -198,6 +231,7 @@ void hotKeyThread(ClipboardData* clipboardData){
     for(;;) {   
         if(GetMessage(&msg, NULL, 0, 0) > 0) {
             if(msg.message == WM_HOTKEY) {
+                mainWindow->popWindow();
                 lock_guard<mutex> lock(clipboardData->mutex);
                 printf("pressed\n");
                 Sleep(100); //interferencia com o controlH
@@ -217,13 +251,18 @@ void hotKeyThread(ClipboardData* clipboardData){
                 input[3].ki.wVk = VK_CONTROL;
                 input[3].ki.dwFlags = KEYEVENTF_KEYUP;
                 SendInput(4, input, sizeof(INPUT));
+                Sleep(100); //proc controlc
                 OpenClipboard(NULL);
                 //perceber problemas de lock aqui
-                clipboardData->data = (char*)GetClipboardData(CF_TEXT);
 
+                const char* clipboard_ptr = (const char*)GetClipboardData(CF_TEXT);
+                if(clipboard_ptr) {
+                    clipboardData->data = std::string(clipboard_ptr);
+                }
                 printf("Clipboard: %s\n", clipboardData->data.c_str());
-                CloseClipboard();
-                
+                CloseClipboard(); 
+                std::string definition = fetchWordDefinition(clipboardData->data);
+                printf("Definition: %s\n", definition.c_str());
             }
         } else {
             printf("fail.\n");
@@ -245,10 +284,12 @@ std::string fetchWordDefinition(const std::string& word) {
     
     if(curl) {
         std::string url = "https://api.dictionaryapi.dev/api/v2/entries/en/" + word;
+        printf("URL : %s\n", url.c_str());
         
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+      
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
@@ -270,19 +311,20 @@ int main(int argc, char *argv[]) {
     
     QApplication app(argc, argv);
     
-    std::string result = fetchWordDefinition("hello");
-    printf("API Response: %s\n", result.c_str());
-    thread keyMangment(hotKeyThread, &clipboardData);
-    keyMangment.detach();
-
+    //std::string result = fetchWordDefinition("hello");
+    //printf("API Response: %s\n", result.c_str());
+    
     MainWindow window(&clipboardData);
 
-    window.show();    
+    thread keyMangment(hotKeyThread, &clipboardData, &window);
+    keyMangment.detach();
+
+
 
     int result_code = app.exec();
     
 
-    fflush(stdout);
+    
     curl_global_cleanup();
     return result_code;
     
