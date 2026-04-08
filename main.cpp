@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <curl/curl.h>
 #include <QApplication>
 #include <QPushButton>
 #include <QWidget>
@@ -233,22 +234,57 @@ void hotKeyThread(ClipboardData* clipboardData){
 }
 
 
+size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
+    userp->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
+
+std::string fetchWordDefinition(const std::string& word) {
+    CURL* curl = curl_easy_init();
+    std::string readBuffer;
+    
+    if(curl) {
+        std::string url = "https://api.dictionaryapi.dev/api/v2/entries/en/" + word;
+        
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+        
+        CURLcode res = curl_easy_perform(curl);
+        if(res != CURLE_OK) {
+            printf("CURL Error: %s\n", curl_easy_strerror(res));
+            readBuffer = "Erro ao conectar à API";
+        }
+        curl_easy_cleanup(curl);
+    }
+    return readBuffer;
+}
 
 int main(int argc, char *argv[]) {
+    curl_global_init(CURL_GLOBAL_DEFAULT);
     
     ClipboardData clipboardData;
+    
     QApplication app(argc, argv);
     
-    
+    std::string result = fetchWordDefinition("hello");
+    printf("API Response: %s\n", result.c_str());
     thread keyMangment(hotKeyThread, &clipboardData);
-    
     keyMangment.detach();
-    
+
     MainWindow window(&clipboardData);
 
     window.show();    
 
-    return app.exec();
+    int result_code = app.exec();
+    
+
+    fflush(stdout);
+    curl_global_cleanup();
+    return result_code;
     
 }
 #include "main.moc"
