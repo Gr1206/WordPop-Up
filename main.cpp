@@ -1,251 +1,192 @@
-#include <stdio.h>
-#include <curl/curl.h>
-#include <QApplication>
-#include <QPushButton>
-#include <QWidget>
-#include <QString>
-#include <QTimer>
-#include <QLabel>
-#include <QMouseEvent>
-#include <QKeyEvent>
-#include <QPainter>
-#include <QDebug>
-#include <windows.h>
-#include <thread>
-#include <mutex>
-#include <string>
-#include <nlohmann/json.hpp>
-
+#include "main.hpp"
 using namespace std;
-using json = nlohmann::json;
-
-class MainWindow;
-std::string fetchWordDefinition(const std::string& word);
-std::string apiOutput(const string& output);
-void getAllDefs(const json& jsonData, string* definitions);
-struct ClipboardData {
-    string data;
-    mutex mutex;
-};
-
-class canvasForCoord : public QWidget {
-    Q_OBJECT
-    private: //atribute
-        bool moving = false;
-        QPoint mousePos;
-        int widthRec = 20, heightRec = 10;
-        int x, y;
-
-        public:
-        canvasForCoord(QWidget *parent = nullptr) : QWidget(parent) {
-            this->setWindowTitle("Canvas coords");
-            this->setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
-            this->setWindowState(Qt::WindowFullScreen); 
-            this->x = (this->width() / 2) - int(this->widthRec / 2);
-            this->y = (this->height() / 2) - int(this->heightRec / 2);
-
-            this->setWindowOpacity(0.5); 
-            this->setStyleSheet("background-color: black;"); 
-            this->setMouseTracking(true);
-            
-
-    }
-    protected:
-        void paintEvent(QPaintEvent *event) override {
-            QPainter painter(this);
-            painter.setPen(Qt::red);
-            painter.setBrush(Qt::NoBrush);
-            
-            
-            painter.drawRect(x, y, widthRec, heightRec);
-            painter.setBrush(Qt::red);
-            //i need to make this move as well
-            painter.drawEllipse(QPoint(x + widthRec / 2, y + heightRec / 2), 2, 2);
-
-        }
-    //draw the coordinates cursor
-
-        void mousePressEvent(QMouseEvent *event) override {
-            if(event->button() == Qt::LeftButton) {
-                moving = true;
-                mousePos = event->pos();
-                this->x = event->position().x() - int(widthRec / 2);
-                this->y = event->position().y() - int(heightRec / 2);
-                this->configCoords(x, y);
-                this->update();
-                
-            }
-        }
-
-        void keyPressEvent(QKeyEvent *event) override {
-            if(event->key() == Qt::Key_Escape) {
-                this->close();
-                emit windowClosed();
-            }
-        }
-        
-        void configCoords(int x, int y) {
-            this->x = x;
-            this->y = y;
-            emit coordsChanged(x, y);
-            this->update();
-        }
-
-        signals :
-            void windowClosed(); 
-            void coordsChanged(int x, int y);
 
 
+CanvasForCoord::CanvasForCoord(QWidget *parent) : QWidget(parent) {
+    this->setWindowTitle("Canvas coords");
+    this->setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+    this->setWindowState(Qt::WindowFullScreen); 
+    this->x = (this->width() / 2) - int(this->widthRec / 2);
+    this->y = (this->height() / 2) - int(this->heightRec / 2);
+
+    this->setWindowOpacity(0.5); 
+    this->setStyleSheet("background-color: black;"); 
+    this->setMouseTracking(true);
+}
 
     
+void CanvasForCoord::paintEvent(QPaintEvent *event)  {
+    QPainter painter(this);
+    painter.setPen(Qt::red);
+    painter.setBrush(Qt::NoBrush);
+    
+    
+    painter.drawRect(x, y, widthRec, heightRec);
+    painter.setBrush(Qt::red);
+    //i need to make this move as well
+    painter.drawEllipse(QPoint(x + widthRec / 2, y + heightRec / 2), 2, 2);
+
+}
+
+void CanvasForCoord::mousePressEvent(QMouseEvent *event)  {
+    if(event->button() == Qt::LeftButton) {
+        mousePos = event->pos();
+        this->x = event->position().x() - int(widthRec / 2);
+        this->y = event->position().y() - int(heightRec / 2);
+        this->configCoords(x, y);
+        this->update();
         
-};
+    }
+}
 
-class MainWindow : public QWidget {
-    private: 
-        int widthM;
-        int heightM;
-        QPushButton button;
-        QPushButton hideButton;
-        canvasForCoord* canvas;
-        QTimer *timer;
-        ClipboardData* clipboardData;
-        QLabel *infoLabel;
-        QLabel *definitionLabel;
+void CanvasForCoord::keyPressEvent(QKeyEvent *event)  {
+    if(event->key() == Qt::Key_Escape) {
+        this->close();
+        emit windowClosed();
+    }
+}
 
-    public:
-        MainWindow(ClipboardData* data = nullptr, QWidget *parent = nullptr) : QWidget(parent) {
-            this->clipboardData = data;
-            this->widthM = 400;
-            this->heightM = 300;
-            this->setWindowTitle("Qt Window Example");
-            //this->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
-            this->resize(widthM, heightM);
-            this->setStyleSheet(
-                "QWidget { background-color: white;}"
-                "QPushButton { background-color: black; padding: 5px; opacity: 0.8; }"
-                "QPushButton:hover { background-color: #555; }"
-                "QLabel { font-size: 14px; font-weight: bold; }"
-            );
-            this->setWindowOpacity(0.7);
-            
-            createConfigButton();
-            createHideButton();
-            createInfoLabel();
-           createDefinitionLabel();
-           //depois quando for só para abrir caso o user clique tirar
+void CanvasForCoord::configCoords(int x, int y) {
+    this->x = x;
+    this->y = y;
+    emit coordsChanged(x, y);
+    this->update();
+}
+
+
+
+
+//organizar esta funcao
+MainWindow::MainWindow(ClipboardData* data = nullptr, QWidget *parent) : QWidget(parent) {
+    this->clipboardData = data;
+    this->setWindowTitle("Qt Window Example");
+    //this->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+    this->resize(widthM, heightM);
+    this->setStyleSheet(
+        "QWidget { background-color: white;}"
+        "QPushButton { background-color: black; padding: 5px; opacity: 0.8; }"
+        "QPushButton:hover { background-color: #555; }"
+        "QLabel { font-size: 14px; font-weight: bold; }"
+    );
+    this->setWindowOpacity(0.7);
+    
+    createConfigButton();
+    createHideButton();
+    createInfoLabel();
+    createDefinitionLabel();
+    //depois quando for só para abrir caso o user clique tirar
+    this->show();
+    
+    
+    this->timer = new QTimer(this);
+    this->canvas = new CanvasForCoord();
+    QObject::connect(canvas, &CanvasForCoord::coordsChanged, this, &MainWindow::updateCoords);
+    QObject::connect(canvas, &CanvasForCoord::windowClosed, this, [this]() {
+        this->show();
+    });
+
+
+    QObject::connect(&button, &QPushButton::clicked, [this]() {
+        this->hide();
+        this->canvas->show();
+
+    });
+
+    QObject::connect(&hideButton, &QPushButton::clicked, [this]() {
+        this->hide();
+    });
+
+    QObject::connect(timer, &QTimer::timeout, [this]() {
+        //check se palavra é a mesma para n perder tempo
+        lock_guard<mutex> lock(this->clipboardData->mutex);
+        if(this->clipboardData->data.empty() || this->clipboardData->data == this->infoLabel->text().toStdString()) {
+            return;
+        }
+        
+        if(!this->isMinimized()){
+            this->setWindowState(Qt::WindowNoState); 
             this->show();
-           
-           
-            this->timer = new QTimer(this);
-            this->canvas = new canvasForCoord();
-            QObject::connect(canvas, &canvasForCoord::coordsChanged, this, &MainWindow::updateCoords);
-            QObject::connect(canvas, &canvasForCoord::windowClosed, this, [this]() {
-                this->show();
-            });
-
-
-            QObject::connect(&button, &QPushButton::clicked, [this]() {
-                this->hide();
-                this->canvas->show();
-
-            });
-
-            QObject::connect(&hideButton, &QPushButton::clicked, [this]() {
-                this->hide();
-            });
-
-            QObject::connect(timer, &QTimer::timeout, [this]() {
-                //check se palavra é a mesma para n perder tempo
-                lock_guard<mutex> lock(this->clipboardData->mutex);
-                if(this->clipboardData->data.empty() || this->clipboardData->data == this->infoLabel->text().toStdString()) {
-                    return;
-                }
-                
-                if(!this->isMinimized()){
-                    this->setWindowState(Qt::WindowNoState); 
-                    this->show();
-                    this->raise();
-                    this->activateWindow();
-                }
-
-                this->infoLabel->setText(QString::fromStdString(this->clipboardData->data));
-                std::string definition = fetchWordDefinition(clipboardData->data);
-                this->definitionLabel->setText(QString::fromStdString(apiOutput(definition)));
-                
-            });    
-
-            this->timer->start(100); 
+            this->raise();
+            this->activateWindow();
         }
+
+        this->infoLabel->setText(QString::fromStdString(this->clipboardData->data));
+        std::string definition = fetchWordDefinition(clipboardData->data);
+        this->definitionLabel->setText(QString::fromStdString(apiOutput(definition)));
         
-        void setText(const QString& text) {
-            this->infoLabel->setText(text);
-        }
+    });    
 
-        void setClipboardData(ClipboardData* data) {
-            this->clipboardData = data;
-        }
+    this->timer->start(100); 
+}
 
-        void updateCoords(int x, int y) {
-            int newX = x - (this->widthM / 2);
-            int newY = y - (this->heightM / 2);
-            this->move(newX, newY);
-            this->update();
-        }
+void MainWindow::setText(const QString& text) {
+    this->infoLabel->setText(text);
+}
+
+void MainWindow::setClipboardData(ClipboardData* data) {
+    this->clipboardData = data;
+}
+
+void MainWindow::updateCoords(int x, int y) {
+    int newX = x - (this->widthM / 2);
+    int newY = y - (this->heightM / 2);
+    this->move(newX, newY);
+    this->update();
+}
         
-        void popWindow() {
-            this->show();
-        }
+void MainWindow::popWindow() {
+    this->show();
+}
 
-        protected:
-            void keyPressEvent(QKeyEvent *event) override {
-                if(event->key() == Qt::Key_Escape) {
-                    this->hide();
-                }
-            }
+void MainWindow::keyPressEvent(QKeyEvent *event) {
+    if(event->key() == Qt::Key_Escape) {
+        this->hide();
+    }
+}
 
-        private:
-            void createConfigButton() {
-                button.setText("Config");
-                button.setParent(this);
-                buttonCoords();
-            }
+void MainWindow::createConfigButton() {
+    button.setText("Config");
+    button.setParent(this);
+    buttonCoords();
+}
 
-            void buttonCoords() {
-                button.move(this->widthM - 100, 0);
-                button.resize(100, 30);
-            }
+void MainWindow::buttonCoords() {
+    button.move(this->widthM - 100, 0);
+    button.resize(100, 30);
+}
 
-            void createHideButton() {
-                //implementar
-                hideButton.setText("Hide");
-                hideButton.setParent(this);
-                hideButtonCoords();
-                 
-            }
-            void hideButtonCoords() {
-                hideButton.move(this->widthM - 100, 30);
-                hideButton.resize(100, 30);
-            }
+void MainWindow::createHideButton() {
+    //implementar
+    hideButton.setText("Hide");
+    hideButton.setParent(this);
+    hideButtonCoords();
+        
+}
 
-            void createInfoLabel() { //palavra selecionada
-                this->infoLabel = new QLabel("WORDS", this);
-                this->infoLabel->setParent(this);
-                this->infoLabel->move(10, 10);
-                this->infoLabel->resize(100, 20); //posso fazer dinamico dependendo no sizeword
-                this->infoLabel->setStyleSheet("color: black; background-color: yellow; font-size: 18px; font-weight: bold;");
-            }
-            void createDefinitionLabel() { //definição da palavra
-                this->definitionLabel = new QLabel("DEFINITION", this);
-                this->definitionLabel->setParent(this);
-                this->definitionLabel->move(10, 70);
-                this->definitionLabel->resize(350, 200); //posso fazer dinamico dependendo no sizeword
-                this->definitionLabel->setStyleSheet("color: black; background-color: lightgray; font-size: 12px; padding: 5px;");
-                this->definitionLabel->setWordWrap(true);
-                this->definitionLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-                this->definitionLabel->setGeometry(10, 70, 350, 200);
-            }
-    };
+void MainWindow::hideButtonCoords() {
+    hideButton.move(this->widthM - 100, 30);
+    hideButton.resize(100, 30);
+}
+
+void MainWindow::createInfoLabel() { //palavra selecionada
+    this->infoLabel = new QLabel("WORDS", this);
+    this->infoLabel->setParent(this);
+    this->infoLabel->move(10, 10);
+    this->infoLabel->resize(100, 20); //posso fazer dinamico dependendo no sizeword
+    this->infoLabel->setStyleSheet("color: black; background-color: yellow; font-size: 18px; font-weight: bold;");
+}
+
+void MainWindow::createDefinitionLabel() { //definição da palavra
+    this->definitionLabel = new QLabel("DEFINITION", this);
+    this->definitionLabel->setParent(this);
+    this->definitionLabel->move(10, 70);
+    this->definitionLabel->resize(350, 200); //posso fazer dinamico dependendo no sizeword
+    this->definitionLabel->setStyleSheet("color: black; background-color: lightgray; font-size: 12px; padding: 5px;");
+    this->definitionLabel->setWordWrap(true);
+    this->definitionLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    this->definitionLabel->setGeometry(10, 70, 350, 200);
+}
+
 
 void getAllDefs(const json& jsonData, string* definitions) {
     for (const auto& entry : jsonData){
@@ -257,7 +198,8 @@ void getAllDefs(const json& jsonData, string* definitions) {
         }
     }
 }
-std::string apiOutput(const string& output) {
+
+string apiOutput(const string& output) {
     try {
         json jsonData = json::parse(output);
 
@@ -396,4 +338,3 @@ int main(int argc, char *argv[]) {
     return result_code;
     
 }
-#include "main.moc"

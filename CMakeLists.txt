@@ -29,7 +29,7 @@ FetchContent_MakeAvailable(json)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-add_executable(DicionarioPopUp main.cpp)
+add_executable(DicionarioPopUp main.cpp main.hpp)
 
 target_include_directories(DicionarioPopUp PRIVATE ${CURL_INCLUDE_DIR})
 
