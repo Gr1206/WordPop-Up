@@ -14,10 +14,15 @@
 #include <thread>
 #include <mutex>
 #include <string>
+#include <nlohmann/json.hpp>
+
 using namespace std;
+using json = nlohmann::json;
 
 class MainWindow;
 std::string fetchWordDefinition(const std::string& word);
+std::string apiOutput(const string& output);
+void getAllDefs(const json& jsonData, string* definitions);
 struct ClipboardData {
     string data;
     mutex mutex;
@@ -106,6 +111,8 @@ class MainWindow : public QWidget {
         QTimer *timer;
         ClipboardData* clipboardData;
         QLabel *infoLabel;
+        QLabel *definitionLabel;
+
     public:
         MainWindow(ClipboardData* data = nullptr, QWidget *parent = nullptr) : QWidget(parent) {
             this->clipboardData = data;
@@ -125,7 +132,7 @@ class MainWindow : public QWidget {
             createConfigButton();
             createHideButton();
             createInfoLabel();
-           
+           createDefinitionLabel();
            //depois quando for só para abrir caso o user clique tirar
             this->show();
            
@@ -151,7 +158,21 @@ class MainWindow : public QWidget {
             QObject::connect(timer, &QTimer::timeout, [this]() {
                 //check se palavra é a mesma para n perder tempo
                 lock_guard<mutex> lock(this->clipboardData->mutex);
+                if(this->clipboardData->data.empty() || this->clipboardData->data == this->infoLabel->text().toStdString()) {
+                    return;
+                }
+                
+                if(!this->isMinimized()){
+                    this->setWindowState(Qt::WindowNoState); 
+                    this->show();
+                    this->raise();
+                    this->activateWindow();
+                }
+
                 this->infoLabel->setText(QString::fromStdString(this->clipboardData->data));
+                std::string definition = fetchWordDefinition(clipboardData->data);
+                this->definitionLabel->setText(QString::fromStdString(apiOutput(definition)));
+                
             });    
 
             this->timer->start(100); 
@@ -211,13 +232,56 @@ class MainWindow : public QWidget {
                 this->infoLabel = new QLabel("WORDS", this);
                 this->infoLabel->setParent(this);
                 this->infoLabel->move(10, 10);
-                this->infoLabel->resize(20, 20); //posso fazer dinamico dependendo no sizeword
-                this->infoLabel->setStyleSheet("color: red; background-color: yellow;");
+                this->infoLabel->resize(100, 20); //posso fazer dinamico dependendo no sizeword
+                this->infoLabel->setStyleSheet("color: black; background-color: yellow; font-size: 18px; font-weight: bold;");
+            }
+            void createDefinitionLabel() { //definição da palavra
+                this->definitionLabel = new QLabel("DEFINITION", this);
+                this->definitionLabel->setParent(this);
+                this->definitionLabel->move(10, 70);
+                this->definitionLabel->resize(350, 200); //posso fazer dinamico dependendo no sizeword
+                this->definitionLabel->setStyleSheet("color: black; background-color: lightgray; font-size: 12px; padding: 5px;");
+                this->definitionLabel->setWordWrap(true);
+                this->definitionLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+                this->definitionLabel->setGeometry(10, 70, 350, 200);
             }
     };
 
+void getAllDefs(const json& jsonData, string* definitions) {
+    for (const auto& entry : jsonData){
+        for (const auto& meaning : entry["meanings"]) {
+            for (const auto& definition : meaning["definitions"]) {
+                *definitions += definition["definition"].get<std::string>() + "\n";
+                break;
+            }
+        }
+    }
+}
+std::string apiOutput(const string& output) {
+    try {
+        json jsonData = json::parse(output);
 
+        if(jsonData.is_object() && jsonData.contains("title") && jsonData["title"] == "No Definitions Found") {
+            return "No definitions found.";
+        }
 
+        if(jsonData.is_array() && jsonData.empty()) {
+            return "No definitions found.";
+        }
+        
+        string definitions;
+        
+        //processar erros da library
+        getAllDefs(jsonData, &definitions);
+        return definitions;
+    }
+    catch (const nlohmann::json::parse_error& e) {
+        printf("JSON Parse Error: %s\n", e.what());
+        //quero falhar sem crash
+        return "erro";
+    }
+
+}
 
 void hotKeyThread(ClipboardData* clipboardData, MainWindow* mainWindow) {
     
@@ -261,8 +325,7 @@ void hotKeyThread(ClipboardData* clipboardData, MainWindow* mainWindow) {
                 }
                 printf("Clipboard: %s\n", clipboardData->data.c_str());
                 CloseClipboard(); 
-                std::string definition = fetchWordDefinition(clipboardData->data);
-                printf("Definition: %s\n", definition.c_str());
+                
             }
         } else {
             printf("fail.\n");
@@ -283,8 +346,12 @@ std::string fetchWordDefinition(const std::string& word) {
     std::string readBuffer;
     
     if(curl) {
-        std::string url = "https://api.dictionaryapi.dev/api/v2/entries/en/" + word;
+        string cleanWord = word;
+        cleanWord.erase(cleanWord.find_last_not_of(" \n\r\t") + 1);
+        cleanWord.erase(0, cleanWord.find_first_not_of(" \n\r\t"));
+        std::string url = "https://api.dictionaryapi.dev/api/v2/entries/en/" + cleanWord;
         printf("URL : %s\n", url.c_str());
+        
         
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
