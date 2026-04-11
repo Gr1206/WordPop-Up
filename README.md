@@ -1,3 +1,3 @@
 # WordPop-Up
-Utility app for windows
+Utility app.
 Minimalist dictionary popup for Windows.
